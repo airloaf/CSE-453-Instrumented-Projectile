@@ -41,3 +41,11 @@ The Instrumented projectile will house a microcontroller circuit that is outfitt
 ## Installing Circuit Python
 
 [Trinket M0 Circuit Python Installation](https://learn.adafruit.com/adafruit-trinket-m0-circuitpython-arduino/circuitpython)
+
+
+## Directory Structure
+
+```
+docs/               Documentation for assembling the projectile
+HardwareTests/      Tests for hardware components in isolation
+```
