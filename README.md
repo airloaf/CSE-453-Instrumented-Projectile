@@ -37,3 +37,7 @@ The Instrumented projectile will house a microcontroller circuit that is outfitt
 -[Tennis Balls](https://www.amazon.com/Wilson-Sporting-Goods-Prime-Tennis/dp/B07CFH181X/ref=sr_1_2?dchild=1&keywords=tennis&qid=1616775832&sr=8-2&th=1&psc=1)
 
 -[USB SD Card Reader](https://www.amazon.com/Adapter-Standard-Connector-Smartphones-Function/dp/B01BXSKPES)
+
+## Installing Circuit Python
+
+[Trinket M0 Circuit Python Installation](https://learn.adafruit.com/adafruit-trinket-m0-circuitpython-arduino/circuitpython)
