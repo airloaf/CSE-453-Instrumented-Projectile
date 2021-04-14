@@ -49,4 +49,5 @@ The Instrumented projectile will house a microcontroller circuit that is outfitt
 docs/               Documentation for assembling the projectile
 HardwareTests/      Tests for hardware components in isolation
 libs/               Libraries either for the microcontroller code or for fritzing circuits
+models/             3D models for the projectile
 ```
