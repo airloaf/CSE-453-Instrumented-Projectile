@@ -38,9 +38,13 @@ The Instrumented projectile will house a microcontroller circuit that is outfitt
 
 -[USB SD Card Reader](https://www.amazon.com/Adapter-Standard-Connector-Smartphones-Function/dp/B01BXSKPES)
 
-## Installing Circuit Python
+## Installing Source Code to Trinket M0
 
-[Trinket M0 Circuit Python Installation](https://learn.adafruit.com/adafruit-trinket-m0-circuitpython-arduino/circuitpython)
+1. Install Circuit Python: ([Trinket M0 Circuit Python Installation](https://learn.adafruit.com/adafruit-trinket-m0-circuitpython-arduino/circuitpython))
+
+2. Copy the contents of ```src/``` into the root directory of the Trinket M0
+
+3. Copy ```libs/Circuit Python``` into the lib folder of the Trinket M0
 
 
 ## Directory Structure
