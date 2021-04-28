@@ -9,16 +9,18 @@ ser.flushInput()
 buf = []
 with open("test_data.csv","a",newline='') as f:
     writer = csv.writer(f,delimiter=",")
-    writer.writerow(["accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z"])
+    writer.writerow(["timestamp,accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z"])
     buf.clear()
+ser.write(b'start sending me data!')
 while True:
-    ser_bytes = ser.read(4)
-    ser_bytes = ser_bytes[-1: -len(ser_bytes)-1: -1]
-    [decoded_bytes] = struct.unpack('f', ser_bytes)
-    buf.append(decoded_bytes)
+    decoded_bytes = []
+    for i in range(7):
+        ser_bytes = ser.read(4)
+        decoded_bytes.append(float(struct.unpack('<f', ser_bytes)[0]))
+    # buf.append(decoded_bytes)
     print(decoded_bytes)
-    if (len(buf) == 6):
+    if (len(decoded_bytes) == 7):
         with open("test_data.csv","a",newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(buf)
-            buf.clear()
+            writer.writerow(decoded_bytes)
+            decoded_bytes.clear()
