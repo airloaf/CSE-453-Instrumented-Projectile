@@ -12,6 +12,9 @@
 #define RECORDING_PERIOD 50
 #define START_TIME_BUFFER 1000
 
+#define MAG_CHECK_PERIOD 10
+#define START_MAGNITUDE_THRESHOLD 30
+
 #define IDLE_STATE 1
 #define RECORD_STATE 2
 #define OFFLOAD_STATE 3
@@ -24,8 +27,6 @@ static float dataBuf[10000];
 unsigned int count;
 static float startBuf[70];
 unsigned int startCount;
-static float magBuf[1000];
-unsigned int magCount;
 
 unsigned int timeRecording;
 unsigned int recordingStartTime;
@@ -33,6 +34,8 @@ unsigned int prevTimestamp;
 unsigned int currentState;
 unsigned int prevMagTime;
 float prevMag;
+
+bool hasRecorded;
 
 void setup(void) {
 
@@ -59,9 +62,9 @@ void setup(void) {
   prevTimestamp = millis();
   currentState = IDLE_STATE;
   prevMag = 10;
-  magCount = 0;
   prevMagTime = millis();
   startCount = 0;
+  hasRecorded = false;
 
   Serial.print("Setup complete.\n");
   delay(100);
@@ -89,11 +92,7 @@ bool checkMag() {
 
   float mag = sqrt(sq(a.acceleration.x) + sq(a.acceleration.y) + sq(a.acceleration.z));
 
-  if (magCount < 1000 && millis() - prevMagTime > 100) {
-    magBuf[magCount++] = mag;
-    prevMagTime = millis();
-  }
-  if (abs(mag - prevMag) > 10) {
+  if (abs(mag - prevMag) > START_MAGNITUDE_THRESHOLD) {
     prevMagTime = millis();
     prevMag = 10;
     return true;
@@ -103,7 +102,7 @@ bool checkMag() {
   return false;
 }
 
-void maintainBuffer() {
+void maintainStartBuffer() {
   /* Get new sensor events with the readings */
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
@@ -126,10 +125,11 @@ void loop() {
   switch(currentState) {
     case IDLE_STATE :
       if (SerialBT.available()) {
-        // Newline on other device should be using 'LF' setting for proper parsing.
+        // Newline on other device should be using 'LF' setting for proper parsing with this method.
         String btMessage = SerialBT.readStringUntil('\n');
         Serial.print("Recieved message: '" + btMessage + "'\n");
         if (btMessage == "record") {
+          // Does not use startBuffer if using mesage to start.
           Serial.print("Entering RECORD_STATE.\n");
           recordingStartTime = millis();
           currentState = RECORD_STATE;
@@ -137,20 +137,15 @@ void loop() {
         else if (btMessage == "data") {
           currentState = OFFLOAD_STATE;
         }
-        else if (btMessage == "mag") {
-          for (int i = 0; i < magCount; i++) {
-            Serial.print(magBuf[i++]);
-            Serial.print('\n');
-          }
-        }
         else {
           SerialBT.print("Invalid message: '" + btMessage + "'\n");
           SerialBT.print("String length: " + String(btMessage.length()) + "\n");
         }
       }
-      
-      if (millis() - prevMagTime > 100 && checkMag()) {
-        Serial.print("Found starting magnitude.\n");
+
+      // Starts recording if the acceleration magnitude is greater than the threshold.
+      if (!hasRecorded && millis() - prevMagTime > MAG_CHECK_PERIOD && checkMag()) {
+        Serial.print("Exceeded starting magnitude threshhold..\n");
         Serial.print("Entering RECORD_STATE.\n");
         for (int i = 0; i < startCount; i++) {
           dataBuf[count++] = startBuf[i];
@@ -159,19 +154,20 @@ void loop() {
         currentState = RECORD_STATE;
       }
       else {
-        maintainBuffer();
+        maintainStartBuffer();
       }
       
       break;
       
     case RECORD_STATE :
       if (timeRecording < RECORDING_LENGTH) {
-        if (millis() - recordingStartTime > START_TIME_BUFFER && millis() - prevMagTime > 100 && checkMag()) {
+        // Checks to see if magnitude threshold was reached again and, if so, sets the timeRecording to only record 10 more cycles.
+        if (millis() - recordingStartTime > START_TIME_BUFFER && millis() - prevMagTime > MAG_CHECK_PERIOD && checkMag()) {
           Serial.print("Found ending magnitude.\n");
           timeRecording = RECORDING_LENGTH - 10*RECORDING_PERIOD;
         }
         if (millis() - prevTimestamp >= RECORDING_PERIOD) {
-          // Record data to buffer
+          // Record data to buffer.
           recordData();
           timeRecording += millis() - prevTimestamp;
           prevTimestamp = millis();
@@ -179,6 +175,7 @@ void loop() {
       }
       else {
         Serial.print("Leaving RECORD_STATE.\n");
+        hasRecorded = true;
         currentState = IDLE_STATE;
       }
       
@@ -186,7 +183,7 @@ void loop() {
       
     case OFFLOAD_STATE :
       Serial.print("Entering OFFLOAD_STATE.\n");
-      // Output the data
+      // Output the data.
       SerialBT.print("Timestamp,Acceleration_x,Acceleration_y,Acceleration_z,Gyro_x,Gyro_y,Gyro_z\n");
       for (int i = 0; i < count; i++) {
         for (int j = 0; j < 7; j++) {
