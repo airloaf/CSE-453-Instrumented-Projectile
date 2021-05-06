@@ -23,14 +23,14 @@ Adafruit_MPU6050 mpu;
 BluetoothSerial SerialBT;
 
 static float dataBuf[10000];
+
 unsigned int count;
 unsigned int numDataPoints;
+
 static float startBuf[70];
 unsigned int startCount;
 
-unsigned int timeRecording;
 unsigned int recordingStartTime;
-unsigned int prevTimestamp;
 unsigned int currentState;
 unsigned int prevMagTime;
 float prevMag;
@@ -39,7 +39,6 @@ bool hasRecorded;
 
 void setup(void)
 {
-
     Serial.begin(9600);
     SerialBT.begin("Instrumented_Projectile");
     Serial.println("Instrumented Projectile Setup");
@@ -59,9 +58,7 @@ void setup(void)
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
     mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 
-    timeRecording = 0;
     count = 0;
-    prevTimestamp = millis();
     currentState = IDLE_STATE;
     prevMag = 10;
     prevMagTime = millis();
@@ -70,25 +67,6 @@ void setup(void)
 
     Serial.print("Setup complete.\n");
     delay(100);
-}
-
-void recordData()
-{
-    /* Get new sensor events with the readings */
-    sensors_event_t a, g, temp;
-    mpu.getEvent(&a, &g, &temp);
-
-    // Store each reading
-    dataBuf[count++] = (float) (millis() - recordingStartTime);
-    dataBuf[count++] = a.acceleration.x;
-    dataBuf[count++] = a.acceleration.y;
-    dataBuf[count++] = a.acceleration.z;
-    dataBuf[count++] = g.gyro.x;
-    dataBuf[count++] = g.gyro.y;
-    dataBuf[count++] = g.gyro.z;
-
-    // increment number of data points
-    numDataPoints++;
 }
 
 bool checkMag()
@@ -109,28 +87,9 @@ bool checkMag()
     return false;
 }
 
-void maintainStartBuffer()
-{
-    /* Get new sensor events with the readings */
-    sensors_event_t a, g, temp;
-    mpu.getEvent(&a, &g, &temp);
-
-    if (startCount > 70) {
-        startCount = 0;
-    }
-
-    // Store each reading
-    startBuf[startCount++] = (float)millis();
-    startBuf[startCount++] = a.acceleration.x;
-    startBuf[startCount++] = a.acceleration.y;
-    startBuf[startCount++] = a.acceleration.z;
-    startBuf[startCount++] = g.gyro.x;
-    startBuf[startCount++] = g.gyro.y;
-    startBuf[startCount++] = g.gyro.z;
-}
-
 void idle();
 void record();
+void recordDataPoint();
 void offloadData();
 
 void loop()
@@ -182,10 +141,6 @@ void idle()
         }
         recordingStartTime = millis();
         currentState = RECORD_STATE;
-        count = 0;
-        numDataPoints = 0;
-    } else {
-        // maintainStartBuffer();
     }
 }
 
@@ -193,16 +148,19 @@ void idle()
 void record()
 {
   Serial.println("Entering Recording State");
+
   numDataPoints = 0;
+  count = 0;
 
-  unsigned long int curTime = millis();
-  recordingStartTime = curTime;
+  recordingStartTime = millis();
+  unsigned long int curTime = recordingStartTime;
   unsigned long int maxTime = curTime + RECORDING_LENGTH;
+  unsigned long int magCheckTime = curTime + MAG_CHECK_PERIOD;
 
-  while (curTime < maxTime)
+  while (curTime < maxTime /* TODO: Put MAG check here */)
   {
     // Record a single data point
-    recordData();
+    recordDataPoint();
     curTime += RECORDING_PERIOD;
     delay(RECORDING_PERIOD);
   }
@@ -210,24 +168,25 @@ void record()
 
   Serial.println("Leaving Recording State");
   currentState = IDLE_STATE;
-  
-//    if (timeRecording < RECORDING_LENGTH) {
-//        // Checks to see if magnitude threshold was reached again and, if so, sets the timeRecording to only record 10 more cycles.
-//        if (millis() - recordingStartTime > START_TIME_BUFFER && millis() - prevMagTime > MAG_CHECK_PERIOD && checkMag()) {
-//            Serial.print("Found ending magnitude.\n");
-//            timeRecording = RECORDING_LENGTH - 10 * RECORDING_PERIOD;
-//        }
-//        if (millis() - prevTimestamp >= RECORDING_PERIOD) {
-//            // Record data to buffer.
-//            recordData();
-//            timeRecording += millis() - prevTimestamp;
-//            prevTimestamp = millis();
-//        }
-//    } else {
-//        Serial.print("Leaving RECORD_STATE.\n");
-//        hasRecorded = true;
-//        currentState = IDLE_STATE;
-//    }
+}
+
+void recordDataPoint()
+{
+    /* Get new sensor events with the readings */
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    // Store each reading
+    dataBuf[count++] = (float) (millis() - recordingStartTime);
+    dataBuf[count++] = a.acceleration.x;
+    dataBuf[count++] = a.acceleration.y;
+    dataBuf[count++] = a.acceleration.z;
+    dataBuf[count++] = g.gyro.x;
+    dataBuf[count++] = g.gyro.y;
+    dataBuf[count++] = g.gyro.z;
+
+    // increment number of data points
+    numDataPoints++;
 }
 
 void offloadData()
