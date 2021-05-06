@@ -8,8 +8,8 @@
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
 #endif
 
-#define RECORDING_LENGTH (10 * 1000)
-#define RECORDING_PERIOD 50
+#define RECORDING_LENGTH (5 * 1000)
+#define RECORDING_PERIOD 10
 #define START_TIME_BUFFER 1000
 
 #define MAG_CHECK_PERIOD 10
@@ -19,12 +19,12 @@
 #define RECORD_STATE 2
 #define OFFLOAD_STATE 3
 
-
 Adafruit_MPU6050 mpu;
 BluetoothSerial SerialBT;
 
 static float dataBuf[10000];
 unsigned int count;
+unsigned int numDataPoints;
 static float startBuf[70];
 unsigned int startCount;
 
@@ -37,168 +37,214 @@ float prevMag;
 
 bool hasRecorded;
 
-void setup(void) {
+void setup(void)
+{
 
-  Serial.begin(9600);
-  SerialBT.begin("Instrumented_Projectile");
-  
-  while (!Serial)
-    delay(10); // will pause Zero, Leonardo, etc until serial console opens
+    Serial.begin(9600);
+    SerialBT.begin("Instrumented_Projectile");
+    Serial.println("Instrumented Projectile Setup");
 
-  // Try to initialize!
-  if (!mpu.begin()) {
-    Serial.println("Failed to find MPU6050 chip");
-    while (1) {
-      delay(10);
+    while (!Serial)
+        delay(10); // will pause Zero, Leonardo, etc until serial console opens
+
+    // Try to initialize!
+    if (!mpu.begin()) {
+        Serial.println("Failed to find MPU6050 chip");
+        while (1) {
+            delay(10);
+        }
     }
-  }
 
-  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+    mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+    mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+    mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 
-  timeRecording = 0;
-  count = 0;
-  prevTimestamp = millis();
-  currentState = IDLE_STATE;
-  prevMag = 10;
-  prevMagTime = millis();
-  startCount = 0;
-  hasRecorded = false;
-
-  Serial.print("Setup complete.\n");
-  delay(100);
-}
-
-void recordData() {
-  /* Get new sensor events with the readings */
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-
-  // Store each reading
-  dataBuf[count++] = (float) millis();
-  dataBuf[count++] = a.acceleration.x;
-  dataBuf[count++] = a.acceleration.y;
-  dataBuf[count++] = a.acceleration.z;
-  dataBuf[count++] = g.gyro.x;
-  dataBuf[count++] = g.gyro.y;
-  dataBuf[count++] = g.gyro.z;
-}
-
-bool checkMag() {
-  /* Get new sensor events with the readings */
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-
-  float mag = sqrt(sq(a.acceleration.x) + sq(a.acceleration.y) + sq(a.acceleration.z));
-
-  if (abs(mag - prevMag) > START_MAGNITUDE_THRESHOLD) {
-    prevMagTime = millis();
+    timeRecording = 0;
+    count = 0;
+    prevTimestamp = millis();
+    currentState = IDLE_STATE;
     prevMag = 10;
-    return true;
-  }
-  prevMagTime = millis();
-  prevMag = mag;
-  return false;
-}
-
-void maintainStartBuffer() {
-  /* Get new sensor events with the readings */
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-
-  if (startCount > 70) {
+    prevMagTime = millis();
     startCount = 0;
-  }
+    hasRecorded = false;
 
-  // Store each reading
-  startBuf[startCount++] = (float) millis();
-  startBuf[startCount++] = a.acceleration.x;
-  startBuf[startCount++] = a.acceleration.y;
-  startBuf[startCount++] = a.acceleration.z;
-  startBuf[startCount++] = g.gyro.x;
-  startBuf[startCount++] = g.gyro.y;
-  startBuf[startCount++] = g.gyro.z;
+    Serial.print("Setup complete.\n");
+    delay(100);
 }
 
-void loop() {
-  switch(currentState) {
-    case IDLE_STATE :
-      if (SerialBT.available()) {
+void recordData()
+{
+    /* Get new sensor events with the readings */
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    // Store each reading
+    dataBuf[count++] = (float) (millis() - recordingStartTime);
+    dataBuf[count++] = a.acceleration.x;
+    dataBuf[count++] = a.acceleration.y;
+    dataBuf[count++] = a.acceleration.z;
+    dataBuf[count++] = g.gyro.x;
+    dataBuf[count++] = g.gyro.y;
+    dataBuf[count++] = g.gyro.z;
+
+    // increment number of data points
+    numDataPoints++;
+}
+
+bool checkMag()
+{
+    /* Get new sensor events with the readings */
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    float mag = sqrt(sq(a.acceleration.x) + sq(a.acceleration.y) + sq(a.acceleration.z));
+
+    if (abs(mag - prevMag) > START_MAGNITUDE_THRESHOLD) {
+        prevMagTime = millis();
+        prevMag = 10;
+        return true;
+    }
+    prevMagTime = millis();
+    prevMag = mag;
+    return false;
+}
+
+void maintainStartBuffer()
+{
+    /* Get new sensor events with the readings */
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    if (startCount > 70) {
+        startCount = 0;
+    }
+
+    // Store each reading
+    startBuf[startCount++] = (float)millis();
+    startBuf[startCount++] = a.acceleration.x;
+    startBuf[startCount++] = a.acceleration.y;
+    startBuf[startCount++] = a.acceleration.z;
+    startBuf[startCount++] = g.gyro.x;
+    startBuf[startCount++] = g.gyro.y;
+    startBuf[startCount++] = g.gyro.z;
+}
+
+void idle();
+void record();
+void offloadData();
+
+void loop()
+{
+    switch (currentState) {
+    case IDLE_STATE:
+        idle();
+        break;
+
+    case RECORD_STATE:
+        record();
+        break;
+
+    case OFFLOAD_STATE:
+        offloadData();
+        break;
+
+    default:
+        Serial.print("Error: currentState is invalid.");
+        SerialBT.print("Error: currentState is invalid.");
+    }
+}
+
+void idle()
+{
+    if (SerialBT.available()) {
         // Newline on other device should be using 'LF' setting for proper parsing with this method.
         String btMessage = SerialBT.readStringUntil('\n');
         Serial.print("Recieved message: '" + btMessage + "'\n");
         if (btMessage == "record") {
-          // Does not use startBuffer if using mesage to start.
-          Serial.print("Entering RECORD_STATE.\n");
-          recordingStartTime = millis();
-          currentState = RECORD_STATE;
+            // Does not use startBuffer if using mesage to start.
+            Serial.print("Entering RECORD_STATE.\n");
+            recordingStartTime = millis();
+            currentState = RECORD_STATE;
+        } else if (btMessage == "data") {
+            currentState = OFFLOAD_STATE;
+        } else {
+            SerialBT.print("Invalid message: '" + btMessage + "'\n");
+            SerialBT.print("String length: " + String(btMessage.length()) + "\n");
         }
-        else if (btMessage == "data") {
-          currentState = OFFLOAD_STATE;
-        }
-        else {
-          SerialBT.print("Invalid message: '" + btMessage + "'\n");
-          SerialBT.print("String length: " + String(btMessage.length()) + "\n");
-        }
-      }
+    }
 
-      // Starts recording if the acceleration magnitude is greater than the threshold.
-      if (!hasRecorded && millis() - prevMagTime > MAG_CHECK_PERIOD && checkMag()) {
+    // Starts recording if the acceleration magnitude is greater than the threshold.
+    if (!hasRecorded && millis() - prevMagTime > MAG_CHECK_PERIOD && checkMag()) {
         Serial.print("Exceeded starting magnitude threshhold..\n");
         Serial.print("Entering RECORD_STATE.\n");
         for (int i = 0; i < startCount; i++) {
-          dataBuf[count++] = startBuf[i];
+            dataBuf[count++] = startBuf[i];
         }
         recordingStartTime = millis();
         currentState = RECORD_STATE;
-      }
-      else {
-        maintainStartBuffer();
-      }
-      
-      break;
-      
-    case RECORD_STATE :
-      if (timeRecording < RECORDING_LENGTH) {
-        // Checks to see if magnitude threshold was reached again and, if so, sets the timeRecording to only record 10 more cycles.
-        if (millis() - recordingStartTime > START_TIME_BUFFER && millis() - prevMagTime > MAG_CHECK_PERIOD && checkMag()) {
-          Serial.print("Found ending magnitude.\n");
-          timeRecording = RECORDING_LENGTH - 10*RECORDING_PERIOD;
-        }
-        if (millis() - prevTimestamp >= RECORDING_PERIOD) {
-          // Record data to buffer.
-          recordData();
-          timeRecording += millis() - prevTimestamp;
-          prevTimestamp = millis();
-        }
-      }
-      else {
-        Serial.print("Leaving RECORD_STATE.\n");
-        hasRecorded = true;
-        currentState = IDLE_STATE;
-      }
-      
-      break;
-      
-    case OFFLOAD_STATE :
-      Serial.print("Entering OFFLOAD_STATE.\n");
-      // Output the data.
-      SerialBT.print("Timestamp,Acceleration_x,Acceleration_y,Acceleration_z,Gyro_x,Gyro_y,Gyro_z\n");
-      for (int i = 0; i < count; i++) {
+        count = 0;
+        numDataPoints = 0;
+    } else {
+        // maintainStartBuffer();
+    }
+}
+
+
+void record()
+{
+  Serial.println("Entering Recording State");
+  numDataPoints = 0;
+
+  unsigned long int curTime = millis();
+  recordingStartTime = curTime;
+  unsigned long int maxTime = curTime + RECORDING_LENGTH;
+
+  while (curTime < maxTime)
+  {
+    // Record a single data point
+    recordData();
+    curTime += RECORDING_PERIOD;
+    delay(RECORDING_PERIOD);
+  }
+  
+
+  Serial.println("Leaving Recording State");
+  currentState = IDLE_STATE;
+  
+//    if (timeRecording < RECORDING_LENGTH) {
+//        // Checks to see if magnitude threshold was reached again and, if so, sets the timeRecording to only record 10 more cycles.
+//        if (millis() - recordingStartTime > START_TIME_BUFFER && millis() - prevMagTime > MAG_CHECK_PERIOD && checkMag()) {
+//            Serial.print("Found ending magnitude.\n");
+//            timeRecording = RECORDING_LENGTH - 10 * RECORDING_PERIOD;
+//        }
+//        if (millis() - prevTimestamp >= RECORDING_PERIOD) {
+//            // Record data to buffer.
+//            recordData();
+//            timeRecording += millis() - prevTimestamp;
+//            prevTimestamp = millis();
+//        }
+//    } else {
+//        Serial.print("Leaving RECORD_STATE.\n");
+//        hasRecorded = true;
+//        currentState = IDLE_STATE;
+//    }
+}
+
+void offloadData()
+{
+    Serial.println("Entering OFFLOAD_STATE.");
+    Serial.print(numDataPoints); Serial.println(" number of data points");
+    // Output the data.
+    SerialBT.print("Timestamp,Acceleration_x,Acceleration_y,Acceleration_z,Gyro_x,Gyro_y,Gyro_z\n");
+
+    for (int i = 0; i < numDataPoints; i++) {
         for (int j = 0; j < 7; j++) {
-          SerialBT.print(dataBuf[i++]);
-          SerialBT.print(',');
+            SerialBT.print(dataBuf[(i*7) + j]);
+            SerialBT.print(',');
         }
         SerialBT.print('\n');
-      }
-      Serial.print("Leaving OFFLOAD_STATE.\n");
-      currentState = IDLE_STATE;
-      
-      break;
-      
-    default :
-      Serial.print("Error: currentState is invalid.");
-      SerialBT.print("Error: currentState is invalid.");
-  }
+    }
+
+    Serial.println("Leaving OFFLOAD_STATE.");
+    currentState = IDLE_STATE;
 }
