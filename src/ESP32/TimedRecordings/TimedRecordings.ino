@@ -10,7 +10,9 @@
 
 #define RECORDING_LENGTH (5 * 1000)
 #define RECORDING_PERIOD 10
+
 #define START_TIME_BUFFER 1000
+#define START_BUFFER_SIZE 21
 
 #define MAG_CHECK_PERIOD 10
 #define START_MAGNITUDE_THRESHOLD 30
@@ -27,8 +29,9 @@ static float dataBuf[10000];
 unsigned int count;
 unsigned int numDataPoints;
 
-static float startBuf[70];
+static float startBuf[START_BUFFER_SIZE];
 unsigned int startCount;
+unsigned int prevStartBufTime;
 
 unsigned int recordingStartTime;
 unsigned int currentState;
@@ -59,10 +62,12 @@ void setup(void)
     mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 
     count = 0;
+    numDataPoints = 0;
     currentState = IDLE_STATE;
     prevMag = 10;
     prevMagTime = millis();
     startCount = 0;
+    prevStartBufTime = millis();
     hasRecorded = false;
 
     Serial.print("Setup complete.\n");
@@ -91,6 +96,7 @@ void idle();
 void record();
 void recordDataPoint();
 void offloadData();
+void maintainStartBuffer();
 
 void loop()
 {
@@ -129,6 +135,8 @@ void idle()
         } else {
             SerialBT.print("Invalid message: '" + btMessage + "'\n");
             SerialBT.print("String length: " + String(btMessage.length()) + "\n");
+            Serial.print("Invalid message: '" + btMessage + "'\n");
+            Serial.print("String length: " + String(btMessage.length()) + "\n");
         }
     }
 
@@ -139,8 +147,11 @@ void idle()
         for (int i = 0; i < startCount; i++) {
             dataBuf[count++] = startBuf[i];
         }
-        recordingStartTime = millis();
+        numDataPoints += startCount/7;
         currentState = RECORD_STATE;
+    }
+    else if (!hasRecorded) {
+      maintainStartBuffer();
     }
 }
 
@@ -149,22 +160,18 @@ void record()
 {
   Serial.println("Entering Recording State");
 
-  numDataPoints = 0;
-  count = 0;
-
   recordingStartTime = millis();
   unsigned long int curTime = recordingStartTime;
   unsigned long int maxTime = curTime + RECORDING_LENGTH;
   unsigned long int magCheckTime = curTime + MAG_CHECK_PERIOD;
 
-  while (curTime < maxTime /* TODO: Put MAG check here */)
+  while (curTime < maxTime /* TODO: Maybe put MAG check here */)
   {
     // Record a single data point
     recordDataPoint();
     curTime += RECORDING_PERIOD;
     delay(RECORDING_PERIOD);
   }
-  
 
   Serial.println("Leaving Recording State");
   currentState = IDLE_STATE;
@@ -177,7 +184,7 @@ void recordDataPoint()
     mpu.getEvent(&a, &g, &temp);
 
     // Store each reading
-    dataBuf[count++] = (float) (millis() - recordingStartTime);
+    dataBuf[count++] = (float) (millis());
     dataBuf[count++] = a.acceleration.x;
     dataBuf[count++] = a.acceleration.y;
     dataBuf[count++] = a.acceleration.z;
@@ -197,13 +204,40 @@ void offloadData()
     SerialBT.print("Timestamp,Acceleration_x,Acceleration_y,Acceleration_z,Gyro_x,Gyro_y,Gyro_z\n");
 
     for (int i = 0; i < numDataPoints; i++) {
-        for (int j = 0; j < 7; j++) {
+        for (int j = 0; j < 6; j++) {
             SerialBT.print(dataBuf[(i*7) + j]);
             SerialBT.print(',');
         }
+        SerialBT.print(dataBuf[(i*7) + 6]);
         SerialBT.print('\n');
     }
 
     Serial.println("Leaving OFFLOAD_STATE.");
     currentState = IDLE_STATE;
+}
+
+#define START_TIME_BUFFER 1000
+#define START_BUFFER_SIZE 21
+
+void maintainStartBuffer() {
+  if (millis() - prevStartBufTime > RECORDING_PERIOD) {
+    if (startCount == START_BUFFER_SIZE) {
+      for (int i = 7; i < START_BUFFER_SIZE; i++) {
+        startBuf[i-7] = startBuf[i];
+      }
+      startCount -= 7;
+    }
+    /* Get new sensor events with the readings */
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    // Store each reading
+    startBuf[startCount++] = (float) (millis());
+    startBuf[startCount++] = a.acceleration.x;
+    startBuf[startCount++] = a.acceleration.y;
+    startBuf[startCount++] = a.acceleration.z;
+    startBuf[startCount++] = g.gyro.x;
+    startBuf[startCount++] = g.gyro.y;
+    startBuf[startCount++] = g.gyro.z;
+  }
 }
