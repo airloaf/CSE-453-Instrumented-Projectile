@@ -202,6 +202,7 @@ void offloadData()
         SerialBT.print('\n');
     }
 
+    SerialBT.println("END");
     Serial.println("Leaving OFFLOAD_STATE.");
     currentState = IDLE_STATE;
 }

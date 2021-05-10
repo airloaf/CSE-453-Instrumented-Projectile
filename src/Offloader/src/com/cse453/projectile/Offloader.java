@@ -1,12 +1,16 @@
 package com.cse453.projectile;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 
 import javax.bluetooth.DiscoveryAgent;
-import javax.bluetooth.L2CAPConnection;
 import javax.bluetooth.LocalDevice;
 import javax.bluetooth.RemoteDevice;
 import javax.microedition.io.Connector;
+import javax.microedition.io.StreamConnection;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MouseAdapter;
@@ -29,8 +33,10 @@ public class Offloader {
 	public static int curSelectedDevice;
 	public static boolean connected = false;
 
-	public static L2CAPConnection connection = null;
-
+	public static StreamConnection connection = null;
+	public static DataOutputStream outStream = null;
+	public static DataInputStream inStream = null;
+	
 	// WIDGETS
 	public static Button btnConnectToDevice = null;
 	
@@ -73,32 +79,83 @@ public class Offloader {
 	
 	public static void connectToDevice()
 	{
-		System.out.println("Connecting to device...");
-		if(curSelectedDevice > -1 && curSelectedDevice < bluetoothAddresses.size()) {
-			String connURL = "btspp://" + bluetoothAddresses.get(curSelectedDevice).getBluetoothAddress() + ":1";
-			System.out.println("Connection string: " + connURL);
-			// Create the connection
+		
+		// If we are connected, attempt to connect to the device
+		if(connection != null) {
 			try {
-//				connection = (L2CAPConnection)
-				Connector.open(connURL);
-				System.out.println("Connection successful");
-				connected = true;
-			}catch(Exception e) {
-				System.out.println("Connection failed!");
-				connection = null;
-				connected = false;
+				connection.close();
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
-			
-			setConnectButtonState();
+			connection = null;
+			inStream = null;
+			outStream = null;
+			connected = false;
+		}else {
+			System.out.println("Connecting to device...");
+			if(curSelectedDevice > -1 && curSelectedDevice < bluetoothAddresses.size()) {
+				String connURL = "btspp://" + bluetoothAddresses.get(curSelectedDevice).getBluetoothAddress() + ":1";
+				System.out.println("Connection string: " + connURL);
+				// Create the connection
+				try {
+					connection = (StreamConnection) Connector.open(connURL);
+					System.out.println("Connection successful");
+					connected = true;
+					inStream = connection.openDataInputStream();
+					outStream = connection.openDataOutputStream();
+				}catch(Exception e) {
+					System.out.println("Connection failed!");
+					connection = null;
+					inStream = null;
+					outStream = null;
+					connected = false;
+				}
+				
+			}
 		}
+
+		setConnectButtonState();
 	}
 	
 	public static void setConnectButtonState()
 	{
 		if(connected) {
-			btnConnectToDevice.setText("Connected");
-		}else {
 			btnConnectToDevice.setText("Disconnect");
+		}else {
+			btnConnectToDevice.setText("Connect to Device");
+		}
+	}
+	
+	public static void recordData()
+	{
+		// Send a press command
+		if(connected && connection != null) {
+			System.out.println("Recording data");
+			try {
+				outStream.write("data".getBytes());
+
+				ArrayList<String> data = new ArrayList<String>();
+				String line = inStream.readLine();
+				
+				while(!line.equals("END"))
+				{
+					data.add(line);
+					line = inStream.readLine();
+				}
+				System.out.println(data);
+				
+				FileWriter myWriter = new FileWriter("data.csv");
+				for(String p: data) {
+					myWriter.write(p);
+					myWriter.write('\n');
+				}
+			    myWriter.close();
+				
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+				System.out.println("Could not send record");
+			}
 		}
 	}
 	
@@ -187,6 +244,12 @@ public class Offloader {
 		new Label(shlProjectileOffloader, SWT.NONE);
 		
 		Button btnSaveData = new Button(shlProjectileOffloader, SWT.NONE);
+		btnSaveData.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseDown(MouseEvent e) {
+				recordData();
+			}
+		});
 		GridData gd_btnSaveData = new GridData(SWT.FILL, SWT.CENTER, true, false, 1, 1);
 		gd_btnSaveData.widthHint = 905;
 		btnSaveData.setLayoutData(gd_btnSaveData);
