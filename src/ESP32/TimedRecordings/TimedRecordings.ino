@@ -11,7 +11,6 @@
 #define RECORDING_LENGTH (5 * 1000)
 #define RECORDING_PERIOD 10
 
-#define START_TIME_BUFFER 1000
 #define START_BUFFER_SIZE 21
 
 #define MAG_CHECK_PERIOD 10
@@ -20,6 +19,7 @@
 #define IDLE_STATE 1
 #define RECORD_STATE 2
 #define OFFLOAD_STATE 3
+#define RESET_STATE 4
 
 Adafruit_MPU6050 mpu;
 BluetoothSerial SerialBT;
@@ -36,9 +36,16 @@ unsigned int prevStartBufTime;
 unsigned int recordingStartTime;
 unsigned int currentState;
 unsigned int prevMagTime;
+bool hasRecorded;
 float prevMag;
 
-bool hasRecorded;
+void idle();
+void record();
+void recordDataPoint();
+void offloadData();
+void reset();
+void maintainStartBuffer();
+bool checkMag();
 
 void setup(void)
 {
@@ -74,30 +81,6 @@ void setup(void)
     delay(100);
 }
 
-bool checkMag()
-{
-    /* Get new sensor events with the readings */
-    sensors_event_t a, g, temp;
-    mpu.getEvent(&a, &g, &temp);
-
-    float mag = sqrt(sq(a.acceleration.x) + sq(a.acceleration.y) + sq(a.acceleration.z));
-
-    if (abs(mag - prevMag) > START_MAGNITUDE_THRESHOLD) {
-        prevMagTime = millis();
-        prevMag = 10;
-        return true;
-    }
-    prevMagTime = millis();
-    prevMag = mag;
-    return false;
-}
-
-void idle();
-void record();
-void recordDataPoint();
-void offloadData();
-void maintainStartBuffer();
-
 void loop()
 {
     switch (currentState) {
@@ -111,6 +94,10 @@ void loop()
 
     case OFFLOAD_STATE:
         offloadData();
+        break;
+
+    case RESET_STATE:
+        reset();
         break;
 
     default:
@@ -132,6 +119,8 @@ void idle()
             currentState = RECORD_STATE;
         } else if (btMessage == "data") {
             currentState = OFFLOAD_STATE;
+        } else if (btMessage == "reset") {
+            currentState = RESET_STATE;
         } else {
             SerialBT.print("Invalid message: '" + btMessage + "'\n");
             SerialBT.print("String length: " + String(btMessage.length()) + "\n");
@@ -174,6 +163,7 @@ void record()
   }
 
   Serial.println("Leaving Recording State");
+  hasRecorded = true;
   currentState = IDLE_STATE;
 }
 
@@ -216,8 +206,16 @@ void offloadData()
     currentState = IDLE_STATE;
 }
 
-#define START_TIME_BUFFER 1000
-#define START_BUFFER_SIZE 21
+void reset() {
+    count = 0;
+    numDataPoints = 0;
+    currentState = IDLE_STATE;
+    prevMag = 10;
+    prevMagTime = millis();
+    startCount = 0;
+    prevStartBufTime = millis();
+    hasRecorded = false;
+}
 
 void maintainStartBuffer() {
   if (millis() - prevStartBufTime > RECORDING_PERIOD) {
@@ -240,4 +238,22 @@ void maintainStartBuffer() {
     startBuf[startCount++] = g.gyro.y;
     startBuf[startCount++] = g.gyro.z;
   }
+}
+
+bool checkMag()
+{
+    /* Get new sensor events with the readings */
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    float mag = sqrt(sq(a.acceleration.x) + sq(a.acceleration.y) + sq(a.acceleration.z));
+
+    if (abs(mag - prevMag) > START_MAGNITUDE_THRESHOLD) {
+        prevMagTime = millis();
+        prevMag = 10;
+        return true;
+    }
+    prevMagTime = millis();
+    prevMag = mag;
+    return false;
 }
