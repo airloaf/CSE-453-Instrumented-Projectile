@@ -20,7 +20,6 @@ import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.wb.swt.SWTResourceManager;
 
 public class Offloader {
 
@@ -76,11 +75,13 @@ public class Offloader {
 	{
 		System.out.println("Connecting to device...");
 		if(curSelectedDevice > -1 && curSelectedDevice < bluetoothAddresses.size()) {
-			String connURL = "btl2cap://" + bluetoothAddresses.get(curSelectedDevice).getBluetoothAddress();
-			System.out.println("Connection string: " + connURL + ";");
+			String connURL = "btspp://" + bluetoothAddresses.get(curSelectedDevice).getBluetoothAddress() + ":1";
+			System.out.println("Connection string: " + connURL);
 			// Create the connection
 			try {
-				connection = (L2CAPConnection) Connector.open(connURL);
+//				connection = (L2CAPConnection)
+				Connector.open(connURL);
+				System.out.println("Connection successful");
 				connected = true;
 			}catch(Exception e) {
 				System.out.println("Connection failed!");
@@ -96,10 +97,8 @@ public class Offloader {
 	{
 		if(connected) {
 			btnConnectToDevice.setText("Connected");
-			btnConnectToDevice.setEnabled(false);
 		}else {
-			btnConnectToDevice.setText("Connect To Device");
-			btnConnectToDevice.setEnabled(true);
+			btnConnectToDevice.setText("Disconnect");
 		}
 	}
 	
@@ -134,7 +133,6 @@ public class Offloader {
 		new Label(shlProjectileOffloader, SWT.NONE);
 		
 		Label lblDevice = new Label(shlProjectileOffloader, SWT.NONE);
-		lblDevice.setFont(SWTResourceManager.getFont("Segoe UI", 20, SWT.NORMAL));
 		lblDevice.setLayoutData(new GridData(SWT.CENTER, SWT.CENTER, false, false, 1, 1));
 		lblDevice.setText("Device");
 		
@@ -164,11 +162,9 @@ public class Offloader {
 			}
 		});
 		btnConnectToDevice.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, false, false, 1, 1));
-		btnConnectToDevice.setFont(SWTResourceManager.getFont("Segoe UI", 15, SWT.BOLD));
 		btnConnectToDevice.setText("Connect To Device");
 		
 		Button btnReloadDevices = new Button(shlProjectileOffloader, SWT.NONE);
-		btnReloadDevices.setFont(SWTResourceManager.getFont("Segoe UI", 15, SWT.BOLD));
 		btnReloadDevices.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false, 1, 1));
 		btnReloadDevices.setText("Refresh Devices");
 		
@@ -191,7 +187,6 @@ public class Offloader {
 		new Label(shlProjectileOffloader, SWT.NONE);
 		
 		Button btnSaveData = new Button(shlProjectileOffloader, SWT.NONE);
-		btnSaveData.setFont(SWTResourceManager.getFont("Segoe UI", 15, SWT.BOLD));
 		GridData gd_btnSaveData = new GridData(SWT.FILL, SWT.CENTER, true, false, 1, 1);
 		gd_btnSaveData.widthHint = 905;
 		btnSaveData.setLayoutData(gd_btnSaveData);
