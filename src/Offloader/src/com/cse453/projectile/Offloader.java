@@ -3,12 +3,16 @@ package com.cse453.projectile;
 import java.util.ArrayList;
 
 import javax.bluetooth.DiscoveryAgent;
+import javax.bluetooth.L2CAPConnection;
 import javax.bluetooth.LocalDevice;
 import javax.bluetooth.RemoteDevice;
+import javax.microedition.io.Connector;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
+import org.eclipse.swt.events.SelectionEvent;
+import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
@@ -22,17 +26,22 @@ public class Offloader {
 
 	protected Shell shlProjectileOffloader;
 
-	public static ArrayList<String> bluetoothAddresses = new ArrayList<String>();
+	public static ArrayList<RemoteDevice> bluetoothAddresses = new ArrayList<RemoteDevice>();
 	public static int curSelectedDevice;
+	public static boolean connected = false;
+
+	public static L2CAPConnection connection = null;
+
+	// WIDGETS
+	public static Button btnConnectToDevice = null;
 	
 	/**
 	 * Launch the application.
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		System.out.println("Hello World!");
-	
 		curSelectedDevice = -1;
+		connected = false;
 		
 		try {
 			Offloader window = new Offloader();
@@ -57,9 +66,41 @@ public class Offloader {
 			// For each bluetooth device, add it to the combo
 			for(RemoteDevice d: remoteDevice) {
 				combo.add(d.getFriendlyName(false));
-				bluetoothAddresses.add(d.getBluetoothAddress());
+				bluetoothAddresses.add(d);
+				System.out.println(d);
 			}
 		}catch(Exception e){}
+	}
+	
+	public static void connectToDevice()
+	{
+		System.out.println("Connecting to device...");
+		if(curSelectedDevice > -1 && curSelectedDevice < bluetoothAddresses.size()) {
+			String connURL = "btl2cap://" + bluetoothAddresses.get(curSelectedDevice).getBluetoothAddress();
+			System.out.println("Connection string: " + connURL + ";");
+			// Create the connection
+			try {
+				connection = (L2CAPConnection) Connector.open(connURL);
+				connected = true;
+			}catch(Exception e) {
+				System.out.println("Connection failed!");
+				connection = null;
+				connected = false;
+			}
+			
+			setConnectButtonState();
+		}
+	}
+	
+	public static void setConnectButtonState()
+	{
+		if(connected) {
+			btnConnectToDevice.setText("Connected");
+			btnConnectToDevice.setEnabled(false);
+		}else {
+			btnConnectToDevice.setText("Connect To Device");
+			btnConnectToDevice.setEnabled(true);
+		}
 	}
 	
 	/**
@@ -98,9 +139,30 @@ public class Offloader {
 		lblDevice.setText("Device");
 		
 		Combo deviceList = new Combo(shlProjectileOffloader, SWT.READ_ONLY);
+		deviceList.addSelectionListener(new SelectionListener() {
+
+			@Override
+			public void widgetDefaultSelected(SelectionEvent arg0) {
+				curSelectedDevice = -1;
+				System.out.println(curSelectedDevice);
+			}
+
+			@Override
+			public void widgetSelected(SelectionEvent arg0) {
+				curSelectedDevice = deviceList.getSelectionIndex();
+				System.out.println(curSelectedDevice);
+			}
+			
+		});
 		deviceList.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false, 1, 1));
 		
-		Button btnConnectToDevice = new Button(shlProjectileOffloader, SWT.NONE);
+		btnConnectToDevice = new Button(shlProjectileOffloader, SWT.NONE);
+		btnConnectToDevice.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseDown(MouseEvent e) {
+				connectToDevice();
+			}
+		});
 		btnConnectToDevice.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, false, false, 1, 1));
 		btnConnectToDevice.setFont(SWTResourceManager.getFont("Segoe UI", 15, SWT.BOLD));
 		btnConnectToDevice.setText("Connect To Device");
