@@ -122,8 +122,22 @@ public class Offloader {
 		if(connected) {
 			btnConnectToDevice.setText("Disconnect");
 		}else {
-			btnConnectToDevice.setText("Connect to Device");
+			btnConnectToDevice.setText("Connect To Device");
 		}
+	}
+	
+	public static void resetProjectile()
+	{
+		// Send a press command
+		if(connected && connection != null) {
+			System.out.println("Resetting Projecitle");
+			try {
+				outStream.write("reset".getBytes());				
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.out.println("Could not send reset command");
+			}
+		}		
 	}
 	
 	public static void recordData()
@@ -241,7 +255,16 @@ public class Offloader {
 		new Label(shlProjectileOffloader, SWT.NONE);
 		new Label(shlProjectileOffloader, SWT.NONE);
 		new Label(shlProjectileOffloader, SWT.NONE);
-		new Label(shlProjectileOffloader, SWT.NONE);
+		
+		Button btnResetProjectile = new Button(shlProjectileOffloader, SWT.NONE);
+		btnResetProjectile.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseDown(MouseEvent e) {
+				resetProjectile();
+			}
+		});
+		btnResetProjectile.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, false, false, 1, 1));
+		btnResetProjectile.setText("Reset Projectile");
 		
 		Button btnSaveData = new Button(shlProjectileOffloader, SWT.NONE);
 		btnSaveData.addMouseListener(new MouseAdapter() {
